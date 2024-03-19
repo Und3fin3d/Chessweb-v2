@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ChessWeb</title>
+    <link rel="stylesheet" href="../static/game.css">
+    <link rel="stylesheet" href="../static/stylesheet.css">
+</head>
+<body>
+    <div id="cont">
+        <div id="menu">
+            <div class="tab" data-name="pair" data-type="flex" onclick="tab(0)">Pairing</div>
+            <div class="tab" data-name='lobby' data-type='block' onclick="tab(1)">Lobby</div>
+            <div class="tab" data-name='custom' data-type='block' onclick="tab(2)">Customise</div>
+            <div class="tab" data-name='friends' data-type='block' onclick="tab(3)">Friends</div>
+            <div class="tab" data-name='profile' data-type='block' onclick="tab(4)">Profile</div>
+        </div>
+
+        <div id="cont">
+            <div id="pair" class="pair val">
+                <div class="game-square" id = "1" onclick="startGame([1,0])">1 min</div>
+                <div class="game-square" id = "4" onclick="startGame([2,2])">2 min+2</div>
+                <div class="game-square" id = "3" onclick="startGame([3,0])">3 min</div>
+                <div class="game-square" id = "5" onclick="startGame([5,0])">5 min</div>
+                <div class="game-square" id = "8" onclick="startGame([5,3])">5 min+3</div>
+                <div class="game-square" id = "10" onclick="startGame([10,0])">10 min</div>
+                <div class="game-square" id = "15" onclick="startGame([10,5])">10min+5</div>
+                <div class="game-square" id = "25" onclick="startGame([10,15])">15min+10</div>
+                <div class="game-square" id = "30" onclick="startGame([30,0])">30 min</div>
+            </div>
+            <div id="lobby" class="lobby val" style="display:none;"></div>
+            <div id="custom" class="custom val" style="display:none;transform: translateY(10vh);"></div>
+            <div id="friends" class="val" style="display: none; transform: translate(20vw,10vh); opacity: 1;">
+                <h2>Play with Friends</h2>
+                <div class="friend-square" onclick="playRoundRobin()" style="max-width: none;height: 20vh;width: 50vw;">Round Robin</div>
+                <div class="friend-square" onclick="playBughouse()" style="max-width: none;height: 20vh;width: 50vw;">Bughouse</div>
+                <div class="friend-square" onclick="playChallenge()" style="max-width: none;height: 20vh;width: 50vw;">Challenge</div>
+                <label for="friendSelect">Select a Friend:</label>
+                <select id="friendSelect"><option value="admin2">admin2</option></select><br><br>
+                <input type="text" id="friendUsername" placeholder="Enter username" style="width: 60vw;margin-bottom: 5%;font-size: 2vmin;">
+                <input id="submit" type="submit" onclick="sendFriendRequest()" value="Send Friend Request" style="font-size: 2vmin;">
+            </div>
+            <div id="profile" class="profile val" style="display:none;">
+                <div id="name"></div>
+                <p class='title login'> <a href="{{ url_for('signin') }}">Not Logged in?</a></p>
+                <p class='title login'> <a href="{{ url_for('logout') }}">Logout?</a></p>
+                <div class="sect">
+                    <p class="title">Stats</p>
+                    - Wins: {{ user.wins }}<br>
+                    - Losses: {{ user.losses }}<br>
+                    - Draws: {{ user.draws }}<br>
+                    - Rating: {{ user.rating }}<p></p>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script>let sess = {{session|tojson}}</script>
+    <script src ="../static/custom.js"></script>
+    <script src="../static/script.js"></script>
+</body>
+</html>

@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <link rel="stylesheet" href="../static/game.css">
+    </head>
+    <body>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+        <script>let colour = {{session|tojson}}.pieces</script>
+        <script>let sess = {{session|tojson}}</script>
+        <div class="sec" id="t">
+            <p class="tle"></p>
+            <p class="tim"></p>
+        </div>
+        <script src ="../static/game.js"></script>
+        <div class="sec" id="bo">
+            <p class="tle"></p>
+            <p class="tim"></p>
+        </div> 
+    </body>
+</html>
+<meta name="viewport" content="width=device-width,user-scalable=no">
