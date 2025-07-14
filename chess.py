@@ -87,9 +87,7 @@ class Board:
                 bishops = [(x-1,y-1) for y in range(len(self.grid())) for x in range(len(self.grid()[0])) if self.grid()[y][x].lower() == 'b']
                 if sum(bishops[0])%2 == sum(bishops[1])%2:
                     self.active = False
-
-                
-            
+                         
     def promotion(self,move):
         prom = move[-1].lower()
         move = [int(move[1])-1,ord(move[0])-97,int(move[3])-1,ord(move[2])-97]

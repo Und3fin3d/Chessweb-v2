@@ -1,14 +1,15 @@
 from flask import render_template,redirect,url_for,session,request
-from flask import render_template,redirect,url_for,session,request
 from flask_socketio import SocketIO, join_room, rooms
 from flask_login import LoginManager,login_user,logout_user,current_user,login_required
 from models import Player,Game
 from static.forms import LoginForm, RegistrationForm
 from chess import Board
+from bug import BugBoards
 from config import app,db
 from time import perf_counter
 
 boards = {}
+vboards = {}
 deletelist = {}
 anon = [1]
 socketio = SocketIO(app, manage_session=False)
@@ -140,6 +141,43 @@ def pair(request):
             create_board(current_user.is_authenticated)
     else:
         create_board(current_user.is_authenticated)
+
+@socketio.on('bugmatch')
+def bugmatch(request):
+    time = request['data'][0]
+    increment = request['data'][1]
+    session['increment'] = increment
+    
+    def create_board(authenticated):
+        games = Game.query.count() + 1 + sum(len(boards[x]) for x in boards)
+        user_id = current_user.id if authenticated else session['id']
+        boards.setdefault(time, {})[games] = [authenticated, [user_id], [session['username']],[], [time*60,time*60], [time*60,time*60], increment, BugBoards()]
+        session['game'] = [games, time]
+        session['pieces'] = False
+        join_room('waiting' + str(games))
+        
+    if 'game' in session:
+        if session['game'][1] in boards and session['game'][0] in boards[session['game'][1]]:
+            boards[session['game'][1]].pop(session['game'][0], None)
+        session.pop('game', None)
+    if time in vboards.setdefault('bug', {}):
+        match = [x for x in boards[time] if boards[time][x][0] == current_user.is_authenticated and len(boards[time][x][0]) < 4 and boards[time][x][6]==increment]
+        if match:
+            y = boards[time][match[0]]
+            y[0] += [current_user.id] if current_user.is_authenticated else [session['id']]
+            pw = len(y[0])
+            #2 -> 1  3->0 4->1
+            y[pw//3 + 2].append(session['username'])
+            session['game'] = [match[0], time]
+            session['pieces'] = pw%2==0
+            join_room('waiting' + str(match[0]))
+            if pw==4:
+                socketio.emit('redirect', url_for('game'), room='waiting' + str(match[0]))
+        else:
+            create_board(current_user.is_authenticated)
+    else:
+        create_board(current_user.is_authenticated)
+
 
 @socketio.on('move')
 def update(request):

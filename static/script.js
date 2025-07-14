@@ -39,10 +39,25 @@ function startGame(time){
     }
     let load = document.createElement('div')
     load.classList.add("load")
-    text = document.getElementById(time[0]+time[1]).innerHTML
     tim = time[0] + time[1]
-    document.getElementById(time[0]+time[1]).innerHTML = ''
-    document.getElementById(time[0]+time[1]).appendChild(load)
+    text = document.getElementById(tim).innerHTML
+    
+    document.getElementById(tim).innerHTML = ''
+    document.getElementById(tim).appendChild(load)
+}
+
+function bugGame(time) {
+    socket.emit("bugmatch", { data: time })
+    if (tim!=undefined){
+        document.getElementById(tim).innerHTML = text
+    }
+    let load = document.createElement('div')
+    load.classList.add("load")
+    tim = 'b' + (time[0] + time[1])
+    text = document.getElementById(tim).innerHTML
+    
+    document.getElementById(tim).innerHTML = ''
+    document.getElementById(tim).appendChild(load)
 }
 
 let items = [ 
@@ -145,22 +160,26 @@ socket.on('error', (data) => {
 })
 
 socket.on('friendList', (data) => {
-    const friendSelect = document.getElementById('friendSelect')
-    friendSelect.innerHTML = ''
+    const Selects = [document.getElementById('friendSelect'),document.getElementsByClassName('Robin')[0],document.getElementsByClassName('Bug')[0]]
+    Selects.forEach(friendSelect =>{
+        console.log(friendSelect)
+        friendSelect.innerHTML = ''
+        
 
-    if (data.friends.length > 0) {
-        data.friends.forEach(friend => {
+        if (data.friends.length > 0) {
+            data.friends.forEach(friend => {
+                const option = document.createElement('option')
+                option.value = friend.username
+                option.textContent = friend.username
+                friendSelect.appendChild(option)
+            })
+        } else {
             const option = document.createElement('option')
-            option.value = friend.username
-            option.textContent = friend.username
+            option.value = ''
+            option.textContent = 'No friends available'
             friendSelect.appendChild(option)
-        })
-    } else {
-        const option = document.createElement('option')
-        option.value = ''
-        option.textContent = 'No friends available'
-        friendSelect.appendChild(option)
-    }
+        }
+    })
 })
 
 socket.on('challenge', (data) => {
