@@ -3,6 +3,14 @@ socketio.on('redirect', (dest) => {
   window.location = dest;
 });
 const sq = {0: 'a', 1: 'b', 2: 'c', 3: 'd', 4: 'e', 5: 'f', 6: 'g', 7: 'h'}
+const boardHost = document.getElementById('primary-board');
+const overlayRoot = document.getElementById('overlay-root');
+const toast = document.getElementById('game-toast');
+const homeBtn = document.getElementById('home-btn');
+const againBtn = document.getElementById('again-btn');
+let gameFinished = false;
+let timer;
+
 let drag
 let beingDragged
 let start
@@ -12,6 +20,35 @@ let over
 let overlay = document.createElement('div')
 let wmove
 let count = false
+
+if (homeBtn) {
+  homeBtn.addEventListener('click', () => socketio.emit('home'))
+}
+if (againBtn) {
+  againBtn.disabled = true
+  againBtn.addEventListener('click', queueClassicRematch)
+}
+
+function queueClassicRematch(){
+  if (!gameFinished) return
+  if (againBtn){
+    againBtn.disabled = true
+  }
+  if (sess['game'][1] == 'challenge'){
+    socketio.emit('challengeAgain')
+  }
+  else{
+    socketio.emit('pair',{data : [sess['game'][1],sess['increment']]})
+  }
+  gameFinished = false
+}
+
+function showToast(message){
+  if (!toast) return
+  toast.textContent = message
+  toast.classList.add('active')
+  setTimeout(() => toast.classList.remove('active'), 2000)
+}
 
 function init(pieces){
   let ChessBoard = document.createElement('div')
@@ -54,7 +91,13 @@ function init(pieces){
       ChessBoard.appendChild(tr)
     }
   }
-  document.body.appendChild(ChessBoard)
+  if (boardHost){
+    boardHost.innerHTML = ''
+    boardHost.appendChild(ChessBoard)
+  }
+  else{
+    document.body.appendChild(ChessBoard)
+  }
   ChessBoard.appendChild(overlay)
 } 
 
@@ -92,6 +135,9 @@ socketio.on('update',function(data){
 
   }
   wmove = data.move
+  if (turnIndicator){
+    turnIndicator.textContent = wmove ? 'White to move' : 'Black to move'
+  }
   tim[0].innerHTML = data.black 
   tim[1].innerHTML = data.white
   if (!count){
@@ -114,39 +160,13 @@ socketio.on('names',function(data){
   names[1].innerHTML = data.white
 })
 
-socketio.on('over', async function(data){
-  const board = document.getElementsByClassName("chessboard")
-  await new Promise(resolve => setTimeout(resolve, 3000))
-  board[0].remove()
-  const t = document.getElementById("t")
-  t.remove()
-  const b = document.getElementById("bo")
-  b.remove()
-  let play = document.createElement('div')
+socketio.on('over', async function(){
+  gameFinished = true
+  if (againBtn){
+    againBtn.disabled = false
+  }
+  showToast('Game over')
   socketio.emit("over")
-  play.setAttribute('class','home')
-  play.innerHTML = "Play again?"
-  play.onclick = function() {
-    if (sess['game'][1] == 'challenge'){
-      socketio.emit("challengeAgain")
-    }
-    else{
-      socketio.emit("pair",{data : [sess['game'][1],sess['increment']]})
-    }
-    let load = document.createElement('div')
-    load.classList.add("load")
-    play.innerHTML = ''
-    play.appendChild(load)
-
-  }
-  let home = document.createElement('div')
-  home.setAttribute('class','home')
-  home.innerHTML = "Homepage"
-  home.onclick = function(){
-    socketio.emit("home")
-  }
-  document.body.appendChild(play)
-  document.body.appendChild(home)
 })
 function send(move){
   socketio.emit("move", { data: move })
