@@ -9,6 +9,7 @@ from config import app, db
 from time import perf_counter
 
 boards = {}
+boards['custom'] = {}  # Store custom position games
 bug_games = {}
 anon = [1]
 socketio = SocketIO(app, manage_session=False)
@@ -49,6 +50,11 @@ def cleanup_standard_session():
         return
     time_key = game[1]
     game_id = game[0]
+    if time_key == 'custom':
+        # Custom games cleanup is handled separately
+        if 'custom' in boards and game_id in boards['custom']:
+            boards['custom'].pop(game_id, None)
+        return
     if time_key in boards and game_id in boards[time_key]:
         boards[time_key].pop(game_id, None)
         if not boards[time_key]:
@@ -208,6 +214,11 @@ def game():
             return render_template('game.html', variant='bughouse')
         return redirect(url_for('index'))
     time_key = session['game'][1]
+    # Support custom games
+    if time_key == 'custom':
+        if session['game'][0] in boards['custom']:
+            return render_template('game.html', variant='classic')
+        return redirect(url_for('index'))
     if time_key in boards and session['game'][0] in boards[time_key]:
         return render_template('game.html', variant='classic')
     return redirect(url_for('index'))
@@ -371,12 +382,23 @@ def bugmatch(request_payload):
         socketio.emit('redirect', url_for('game'), room=waiting_room)
 
 
+def get_game_data():
+    """Get current game data from session, supporting both standard and custom games."""
+    time_key = session['game'][1]
+    game_id = session['game'][0]
+    if time_key == 'custom':
+        return boards['custom'].get(game_id)
+    return boards[time_key].get(game_id) if time_key in boards else None
+
+
 @socketio.on('move')
 def update(request_payload):
     if session.get('variant') == 'bughouse':
         return
     move = request_payload['data']
-    current = boards[session['game'][1]][session['game'][0]]
+    current = get_game_data()
+    if not current:
+        return
     game = current[8]
 
     if move == "initiation":
@@ -450,7 +472,9 @@ def update(request_payload):
 def timeout():
     if session.get('variant') == 'bughouse':
         return
-    current = boards[session['game'][1]][session['game'][0]]
+    current = get_game_data()
+    if not current:
+        return
     elapsed = perf_counter() - current[-1]
     game = current[8]
     clock = current[5] if game.wmove else current[6]
@@ -474,7 +498,13 @@ def timeout():
             new_game.add_moves(game.moves)
             db.session.add(new_game)
             db.session.commit()
-        cleanup_standard_session()
+        # Clean up session based on game type
+        if session['game'][1] == 'custom':
+            game_id = session['game'][0]
+            if game_id in boards['custom']:
+                boards['custom'].pop(game_id, None)
+        else:
+            cleanup_standard_session()
     else:
         if game.wmove:
             current[5] = clock
@@ -641,6 +671,115 @@ def challenge_again():
     session['game'] = [games, 'challenge']
     session['pieces'] = False
     session['variant'] = 'classic'
+
+
+# Custom board game socket events
+@socketio.on('createCustomGame')
+def create_custom_game(request_payload):
+    """Create a new custom game with a specific FEN position and time control."""
+    fen = request_payload.get('fen')
+    time_control = request_payload.get('time', 10)  # Default 10 minutes
+    increment = request_payload.get('increment', 0)
+    
+    if not fen:
+        socketio.emit('error', {'message': 'No FEN position provided.'}, room=request.sid)
+        return
+    
+    try:
+        # Validate FEN by trying to create a board with it
+        test_board = Board(fen)
+    except Exception as e:
+        socketio.emit('error', {'message': f'Invalid FEN position: {str(e)}'}, room=request.sid)
+        return
+    
+    game_id = next_game_id()
+    user_id = current_user.id if current_user.is_authenticated else session['id']
+    
+    # Store custom game: [authenticated, player2_id, player1_id, player2_name, player1_name, white_time, black_time, increment, board, fen, status]
+    boards['custom'][game_id] = [
+        current_user.is_authenticated,
+        None,  # player 2 (opponent) - not joined yet
+        user_id,  # player 1 (creator)
+        None,  # player 2 name
+        session['username'],  # creator name
+        time_control * 60,  # white time in seconds
+        time_control * 60,  # black time in seconds
+        increment,
+        Board(fen),  # board with custom position
+        fen,  # store the FEN
+        'waiting'  # status: waiting, active, completed
+    ]
+    
+    socketio.emit('customGameCreated', {'gameId': game_id}, room=request.sid)
+
+
+@socketio.on('listCustomGames')
+def list_custom_games():
+    """Return all available custom games waiting for players."""
+    available_games = []
+    
+    for game_id, game_data in boards['custom'].items():
+        # Only show games that are waiting for opponent (player2 is None)
+        if game_data[1] is None and game_data[10] == 'waiting':
+            # Determine if it's a standard position
+            fen = game_data[9]
+            is_standard = fen == 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
+            
+            available_games.append({
+                'id': game_id,
+                'creator': game_data[4],
+                'time': game_data[5] // 60,  # Convert seconds back to minutes
+                'increment': game_data[7],
+                'fen': fen[:50] + '...' if len(fen) > 50 else fen,  # Truncated FEN preview
+                'isStandard': is_standard,
+                'authenticated': game_data[0]
+            })
+    
+    socketio.emit('customGamesList', {'games': available_games}, room=request.sid)
+
+
+@socketio.on('joinCustomGame')
+def join_custom_game(request_payload):
+    """Join an existing custom game."""
+    game_id = request_payload.get('gameId')
+    
+    if game_id not in boards['custom']:
+        socketio.emit('error', {'message': 'Game not found.'}, room=request.sid)
+        return
+    
+    game_data = boards['custom'][game_id]
+    
+    # Check if game is still waiting
+    if game_data[10] != 'waiting':
+        socketio.emit('error', {'message': 'Game is no longer available.'}, room=request.sid)
+        return
+    
+    # Check if player is trying to join their own game
+    creator_id = game_data[2]
+    current_id = current_user.id if current_user.is_authenticated else session['id']
+    
+    if creator_id == current_id:
+        socketio.emit('error', {'message': 'Cannot join your own game.'}, room=request.sid)
+        return
+    
+    # Add player 2 to the game
+    game_data[1] = current_id
+    game_data[3] = session['username']
+    game_data[10] = 'active'
+    
+    # Set up session for the joining player
+    session['game'] = [game_id, 'custom']
+    session['pieces'] = True  # Player 2 gets black pieces
+    session['variant'] = 'classic'
+    
+    # Notify both players
+    room_name = f'customgame-{game_id}'
+    join_room(room_name)
+    socketio.emit('redirect', url_for('game'), room=request.sid)
+    
+    # Also redirect the creator if they're still waiting
+    creator_room = f'waiting-custom-{game_id}'
+    socketio.emit('redirect', url_for('game'), room=creator_room)
 
 
 if __name__ == "__main__":

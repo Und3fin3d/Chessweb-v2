@@ -39,7 +39,36 @@
                 </div>
             </div>
             <div id="lobby" class="lobby val" style="display:none;"></div>
-            <div id="custom" class="custom val" style="display:none;transform: translateY(10vh);"></div>
+            <div id="custom" class="custom val" style="display:none;transform: translateY(10vh);">
+                <div id="custom-controls" style="margin-bottom: 20px; padding: 15px; background: #1a1a1a; border-radius: 8px;">
+                    <h3 style="margin-bottom: 15px; color: #fff;">Create Custom Game</h3>
+                    <div style="display: flex; gap: 15px; flex-wrap: wrap; align-items: center; margin-bottom: 15px;">
+                        <label style="color: #ccc;">Time Control:</label>
+                        <select id="customTimeControl" style="padding: 8px; background: #2a2a2a; color: #fff; border: 1px solid #444; border-radius: 4px;">
+                            <option value="1">1 minute</option>
+                            <option value="3">3 minutes</option>
+                            <option value="5" selected>5 minutes</option>
+                            <option value="10">10 minutes</option>
+                            <option value="15">15 minutes</option>
+                            <option value="30">30 minutes</option>
+                        </select>
+                        <label style="color: #ccc;">Increment:</label>
+                        <select id="customIncrement" style="padding: 8px; background: #2a2a2a; color: #fff; border: 1px solid #444; border-radius: 4px;">
+                            <option value="0" selected>0 seconds</option>
+                            <option value="1">1 second</option>
+                            <option value="2">2 seconds</option>
+                            <option value="3">3 seconds</option>
+                            <option value="5">5 seconds</option>
+                            <option value="10">10 seconds</option>
+                        </select>
+                    </div>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                        <button onclick="createCustomGame()" class="game-square" style="background: #4CAF50; border: none; cursor: pointer; padding: 12px 24px;">Create Game</button>
+                        <button onclick="resetBoard()" class="game-square" style="background: #2196F3; border: none; cursor: pointer; padding: 12px 24px;">Reset Board</button>
+                        <button onclick="clearBoard()" class="game-square" style="background: #f44336; border: none; cursor: pointer; padding: 12px 24px;">Clear Board</button>
+                    </div>
+                </div>
+            </div>
             <div id="friends" class="val" style="display: none; transform: translate(20vw,10vh); opacity: 1;">
                 <h2>Play with Friends</h2>
                 <div class="friend-square" onclick="playRoundRobin()" style="max-width: none;height: 20vh;width: 50vw;">Round Robin</div>
