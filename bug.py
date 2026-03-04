@@ -1,5 +1,7 @@
 #we need to know when captures have been made
 #we need to be able to place
+#verify checks
+#at fault var
 from chess import *
 
 
@@ -10,7 +12,6 @@ class Board(Board):
         self.FEN = FEN
         self.board, self.wmove, self.wcast, self.bcast, self.ep, self.fifty, self.movenum, self.pool = self.loadFEN(FEN)
         self.moves = []
-        self.otpool = []
         self.result = None
         self.prom = []
         self.legal = []
@@ -138,14 +139,15 @@ class BugBoards:
 
 
 if __name__ == "__main__":
-    # Initialize the bughouse game
-    bughouse_game = BugBoards()
+    pair = BugBoardPair()
+    board1, board2 = pair.get_boards()
 
     # Display initial state
     print("Initial state:")
-    bughouse_game.display()
-
-    # Simulate a sequence of moves
+    board1.displayboard()
+    print('\n'*2)
+    board2.displayboard()
+    boards = [board1,board2]
     """
     moves = [
         ("e2e4", 0),("e2e4", 1),("d7d5", 0),("d7d5", 1),("e4d5", 0),("a7a5",0),("p@d7",1)
@@ -167,7 +169,7 @@ if __name__ == "__main__":
     ]
     
     for move, board_index in moves:
-        bughouse_game.play(move, board_index)
+        boards[board_index].play(move)
         print(f"\nAfter move {move} on board {board_index}:")
         bughouse_game.display()
         print(bughouse_game.active)

@@ -53,7 +53,7 @@ function bugGame(time) {
     }
     let load = document.createElement('div')
     load.classList.add("load")
-    tim = 'b' + (time[0] + time[1])
+    tim = 'bh' + (time[0] + time[1])
     text = document.getElementById(tim).innerHTML
     
     document.getElementById(tim).innerHTML = ''

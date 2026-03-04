@@ -7,11 +7,13 @@ from chess import Board
 from bug import BugBoards
 from config import app, db
 from time import perf_counter
+import os,glob
 
 boards = {}
 boards['custom'] = {}  # Store custom position games
 bug_games = {}
 anon = [1]
+activeg = [0]
 socketio = SocketIO(app, manage_session=False)
 
 BUG_SEATS = [
@@ -221,6 +223,11 @@ def game():
         return redirect(url_for('index'))
     if time_key in boards and session['game'][0] in boards[time_key]:
         return render_template('game.html', variant='classic')
+    return redirect(url_for('index'))
+@app.route('/bgame')
+def bgame():
+    if 'game' in session and session['game'][1] in bboards and session['game'][0] in bboards[session['game'][1]]:
+        return render_template('bgame.html')
     return redirect(url_for('index'))
 
 
