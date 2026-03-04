@@ -1,4 +1,5 @@
 const sq = {0: 'a', 1: 'b', 2: 'c', 3: 'd', 4: 'e', 5: 'f', 6: 'g', 7: 'h'};
+const sq_rev = {'a': 0, 'b': 1, 'c': 2, 'd': 3, 'e': 4, 'f': 5, 'g': 6, 'h': 7};
 let beingDragged;
 let lastX;
 let lastY;
@@ -151,3 +152,71 @@ let b = [['R', 'N', 'B', 'Q', 'K', 'B', 'N', 'R'], ['P', 'P', 'P', 'P', 'P', 'P'
 drawboard(b)
 sidepieces(['P','N', 'B', 'R', 'Q', 'K'],'bot')
 sidepieces(['p','n', 'b', 'r', 'q', 'k'],'top')
+
+// Function to get current board state as a grid
+function getCurrentBoardState() {
+    let board = [];
+    for (let rank = 8; rank >= 1; rank--) {
+        let row = [];
+        for (let file = 0; file < 8; file++) {
+            let squareId = sq[file] + rank;
+            let square = document.getElementById(squareId);
+            let piece = '•';
+            if (square && square.firstChild && square.firstChild.tagName === 'IMG') {
+                piece = square.firstChild.id;
+            }
+            row.push(piece);
+        }
+        board.push(row);
+    }
+    return board;
+}
+
+// Convert board grid to FEN string
+function boardToFEN(board) {
+    let fen = '';
+    for (let row of board) {
+        let emptyCount = 0;
+        for (let piece of row) {
+            if (piece === '•') {
+                emptyCount++;
+            } else {
+                if (emptyCount > 0) {
+                    fen += emptyCount;
+                    emptyCount = 0;
+                }
+                fen += piece;
+            }
+        }
+        if (emptyCount > 0) {
+            fen += emptyCount;
+        }
+        fen += '/';
+    }
+    // Remove trailing slash
+    fen = fen.slice(0, -1);
+    
+    // Add default game state (white to move, all castling rights, no en passant)
+    fen += ' w KQkq - 0 1';
+    return fen;
+}
+
+// Export current board position as FEN
+function exportBoardToFEN() {
+    const board = getCurrentBoardState();
+    return boardToFEN(board);
+}
+
+// Clear the board
+function clearBoard() {
+    let squares = document.querySelectorAll('.square');
+    squares.forEach(square => {
+        square.innerHTML = '';
+    });
+}
+
+// Reset board to standard starting position
+function resetBoard() {
+    let standard = [['R', 'N', 'B', 'Q', 'K', 'B', 'N', 'R'], ['P', 'P', 'P', 'P', 'P', 'P', 'P', 'P'], ['•', '•', '•', '•', '•', '•', '•', '•'], ['•', '•', '•', '•', '•', '•', '•', '•'], ['•', '•', '•', '•', '•', '•', '•', '•'], ['•', '•', '•', '•', '•', '•', '•', '•'], ['p', 'p', 'p', 'p', 'p', 'p', 'p', 'p'], ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r']];
+    drawboard(standard);
+}

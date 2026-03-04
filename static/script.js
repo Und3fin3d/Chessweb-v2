@@ -60,32 +60,125 @@ function bugGame(time) {
     document.getElementById(tim).appendChild(load)
 }
 
-let items = [ 
-    ["User 1", "Time constraint Game mode Rules they have setup"],
-    ["User 2", "Time constraint Game mode Rules they have setup"],
-    ["User 3", "Time constraint Game mode Rules they have setup"],
-    ["User 4", "Time constraint Game mode Rules they have setup"],
-    ["User 5", "Time constraint Game mode Rules they have setup"],
-    ["User 6", "Time constraint Game mode Rules they have setup"]
-]
-
+// Custom games lobby functionality
 let lobby = document.getElementById("lobby")
+let lobbyRefreshInterval = null
 
-for (let i = 0; i < items.length; i++){
-    let new_obj = document.createElement("div")
-    new_obj.classList.add("item")
-    new_obj.style.cursor = "pointer"
-    new_obj.setAttribute("id", i)
+// Fetch and display custom games
+function refreshLobby() {
+    socket.emit("listCustomGames")
+}
 
-    let new_title = document.createElement("p")
-    new_title.innerHTML = items[i][0]
-    let new_desc = document.createElement("p")
-    new_desc.innerHTML = items[i][1]
+// Create a custom game from the current board position
+function createCustomGame() {
+    const fen = exportBoardToFEN()
+    const timeControl = parseInt(document.getElementById("customTimeControl").value)
+    const increment = parseInt(document.getElementById("customIncrement").value)
+    
+    socket.emit("createCustomGame", {
+        fen: fen,
+        time: timeControl,
+        increment: increment
+    })
+}
 
-    new_obj.appendChild(new_title)
-    new_obj.appendChild(new_desc)
+// Join a specific custom game
+function joinCustomGame(gameId) {
+    socket.emit("joinCustomGame", { gameId: gameId })
+}
 
-    lobby.appendChild(new_obj)
+// Render lobby with custom games
+function renderLobby(games) {
+    // Clear existing content
+    lobby.innerHTML = ''
+    
+    if (games.length === 0) {
+        let emptyMsg = document.createElement("div")
+        emptyMsg.classList.add("item")
+        emptyMsg.style.textAlign = "center"
+        emptyMsg.style.color = "#888"
+        emptyMsg.innerHTML = "<p>No custom games available. Create one in the Customise tab!</p>"
+        lobby.appendChild(emptyMsg)
+        return
+    }
+    
+    for (let game of games) {
+        let new_obj = document.createElement("div")
+        new_obj.classList.add("item")
+        new_obj.style.cursor = "pointer"
+        new_obj.setAttribute("data-game-id", game.id)
+        new_obj.onclick = function() { joinCustomGame(game.id) }
+        
+        let positionType = game.isStandard ? "Standard" : "Custom"
+        let authBadge = game.authenticated ? "✓ " : ""
+        
+        let new_title = document.createElement("p")
+        new_title.innerHTML = `${authBadge}${game.creator} <span style="float: right; color: #4CAF50;">${positionType}</span>`
+        new_title.style.fontWeight = "bold"
+        new_title.style.marginBottom = "5px"
+        
+        let new_desc = document.createElement("p")
+        new_desc.style.fontSize = "0.9em"
+        new_desc.style.color = "#aaa"
+        let incText = game.increment > 0 ? `+${game.increment}` : ""
+        new_desc.innerHTML = `⏱️ ${game.time} min${incText} &nbsp;|&nbsp; Position: ${game.fen}`
+        
+        new_obj.appendChild(new_title)
+        new_obj.appendChild(new_desc)
+        
+        // Hover effect
+        new_obj.addEventListener("mouseenter", function() {
+            this.style.background = "#2a2a2a"
+        })
+        new_obj.addEventListener("mouseleave", function() {
+            this.style.background = ""
+        })
+        
+        lobby.appendChild(new_obj)
+    }
+}
+
+// Socket event handlers for custom games
+socket.on('customGamesList', (data) => {
+    renderLobby(data.games)
+})
+
+socket.on('customGameCreated', (data) => {
+    // Show success message or loading indicator
+    let load = document.createElement('div')
+    load.classList.add("load")
+    let btn = document.querySelector('#custom-controls button')
+    if (btn) {
+        btn.innerHTML = ''
+        btn.appendChild(load)
+    }
+})
+
+// Start auto-refreshing lobby when on lobby tab
+function startLobbyRefresh() {
+    if (!lobbyRefreshInterval) {
+        refreshLobby() // Initial load
+        lobbyRefreshInterval = setInterval(refreshLobby, 3000) // Refresh every 3 seconds
+    }
+}
+
+function stopLobbyRefresh() {
+    if (lobbyRefreshInterval) {
+        clearInterval(lobbyRefreshInterval)
+        lobbyRefreshInterval = null
+    }
+}
+
+// Override tab function to handle lobby refresh
+let originalTab = tab
+window.tab = function(new_tab) {
+    originalTab(new_tab)
+    // Tab index 1 is the lobby
+    if (new_tab === 1) {
+        startLobbyRefresh()
+    } else {
+        stopLobbyRefresh()
+    }
 }
 
 let loggedin = sess._fresh
@@ -112,8 +205,10 @@ Array.from(spares).forEach(spare => {
 })
 if (loggedin){
     socket.emit("getFriendList")
-    
 }
+
+// Initial lobby load
+refreshLobby()
 
 function sendFriendRequest() {
     const friendUsername = document.getElementById("friendUsername").value

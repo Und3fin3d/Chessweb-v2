@@ -1,22 +1,72 @@
 <!DOCTYPE html>
 <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <link rel="stylesheet" href="../static/game.css">
-    </head>
-    <body>
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
-        <script>let colour = {{session|tojson}}.pieces</script>
-        <script>let sess = {{session|tojson}}</script>
-        <div class="sec" id="t">
-            <p class="tle"></p>
-            <p class="tim"></p>
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    <title>ChessWeb</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='game.css') }}" />
+</head>
+<body class="{{ variant }}">
+    <div class="game-shell">
+        <div class="player-banner top sec" id="t">
+            <div class="player-meta">
+                <p class="player-name tle" data-role="top-name">Waiting...</p>
+                <span class="player-status" id="top-status"></span>
+            </div>
+            <p class="player-clock tim" data-role="top-clock">00:00</p>
         </div>
-        <script src ="../static/game.js"></script>
-        <div class="sec" id="bo">
-            <p class="tle"></p>
-            <p class="tim"></p>
-        </div> 
-    </body>
+        <div class="boards-grid">
+            <div class="board-card primary">
+                <div class="board-header">
+                    <span class="board-label" id="primary-label">Your board</span>
+                    <span class="turn-indicator" id="turn-indicator"></span>
+                </div>
+                <div id="primary-board" class="chessboard"></div>
+                <div class="board-note" id="primary-note"></div>
+                <div class="pool-panel" id="primary-pool"></div>
+            </div>
+            <div class="board-card secondary" id="secondary-card">
+                <div class="board-header">
+                    <span class="board-label">Partner board</span>
+                </div>
+                <div id="secondary-board" class="chessboard mini"></div>
+                <div class="board-note" id="secondary-note"></div>
+                <div class="pool-panel slim" id="secondary-pool"></div>
+            </div>
+        </div>
+        <div class="player-banner bottom sec" id="bo">
+            <div class="player-meta">
+                <p class="player-name tle" data-role="bottom-name">Waiting...</p>
+                <span class="player-status" id="bottom-status"></span>
+            </div>
+            <p class="player-clock tim" data-role="bottom-clock">00:00</p>
+        </div>
+        <div class="action-row">
+            <button id="home-btn" class="ghost">Home</button>
+            <button id="again-btn" class="primary">Play again</button>
+        </div>
+    </div>
+    <div id="overlay-root"></div>
+    <div class="toast" id="game-toast"></div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script>
+        window.gameMeta = {{ {
+            'session': session,
+            'variant': variant,
+            'bug_board': session.get('bug_board'),
+            'bug_colour': session.get('bug_colour'),
+            'bug_team': session.get('bug_team')
+        } | tojson }}
+    </script>
+    <script>
+        const sessionPayload = {{ session | tojson }};
+        let colour = sessionPayload.pieces;
+        let sess = sessionPayload;
+    </script>
+    {% if variant == 'bughouse' %}
+    <script src="{{ url_for('static', filename='bughouse.js') }}"></script>
+    {% else %}
+    <script src="{{ url_for('static', filename='game.js') }}"></script>
+    {% endif %}
+</body>
 </html>
-<meta name="viewport" content="width=device-width,user-scalable=no">

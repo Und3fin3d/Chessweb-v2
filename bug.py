@@ -5,24 +5,22 @@
 from chess import *
 
 
-class BugBoard(Board):
-    def __init__(self,FEN='rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 -'):
-        self.K = (None,None)
-        self.k = (None,None)
+class Board(Board):
+    def __init__(self, FEN='rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 -'):
+        self.K = (None, None)
+        self.k = (None, None)
         self.FEN = FEN
-        self.board,self.wmove, self.wcast, self.bcast,self.ep,self.fifty, self.movenum,self.pool = self.loadFEN(FEN)
+        self.board, self.wmove, self.wcast, self.bcast, self.ep, self.fifty, self.movenum, self.pool = self.loadFEN(FEN)
         self.moves = []
         self.result = None
         self.prom = []
         self.legal = []
         self.active = True
-        self.partner = None
+        self.last_move = None
         self.isActive()
-    
-    def isBActive(self):
-        return self.active and self.partner.active
+
     def loadFEN(self, FEN):
-        grid = [[Square(f'{chr(97+x)}{y+1}') for x in range(8)] for y in range(8)]
+        grid = [[Square(f'{chr(97 + x)}{y + 1}') for x in range(8)] for y in range(8)]
         FEN = split('[/ ]', FEN)
         gamestate = FEN[8:]
         castle1 = [True if x in ['k', 'q'] else False for x in gamestate[1][:2].lower()]
@@ -30,76 +28,116 @@ class BugBoard(Board):
         b = FEN[:8]
         b.reverse()
         buffer = 0
-        for y,row in enumerate(b):
-            for x,sq in enumerate(row):
+        for y, row in enumerate(b):
+            for x, sq in enumerate(row):
                 if sq.isdigit():
-                    buffer += int(sq)-1
+                    buffer += int(sq) - 1
                 else:
-                    grid[y][x+buffer].movein(self.pclass(sq,x+buffer,y))
+                    grid[y][x + buffer].movein(self.pclass(sq, x + buffer, y))
             buffer = 0
-        return grid,gamestate[0]=='w', castle1, castle2,gamestate[2],gamestate[3],gamestate[-2],[x for x in gamestate[-1] if x != '-']
-    def isCapture(self,move):
+        return grid, gamestate[0] == 'w', castle1, castle2, gamestate[2], gamestate[3], gamestate[-2], [x for x in gamestate[-1] if x != '-']
+
+    def isCapture(self, move):
         return self.board[move[2]][move[3]].occupied
-    def place(self,p,x,y):
+
+    def place(self, p, x, y):
         x2, y2 = (self.K if self.wmove else self.k)
-        print(self.pool)
-        if not(p.lower()=='p' and y in [0,7]) and not self.board[y][x].occupied:
+        if not (p.lower() == 'p' and y in [0, 7]) and not self.board[y][x].occupied:
             if not self.board[y2][x2].piece.check():
-                self.board[y][x].movein(self.pclass(p,x,y))
+                self.board[y][x].movein(self.pclass(p, x, y))
                 self.pool.remove(p)
                 self.wmove = not self.wmove
                 self.ep = '-'
-                self.prom = [] 
+                self.prom = []
+                self.last_move = {'from': None, 'to': self.board[y][x].name, 'type': 'drop', 'piece': p}
             else:
                 old = deepcopy(self.board)
-                self.board[y][x].movein(self.pclass(p,x,y))
+                self.board[y][x].movein(self.pclass(p, x, y))
                 if not self.board[y2][x2].piece.check():
                     self.pool.remove(p)
                     self.wmove = not self.wmove
                     self.ep = '-'
-                    self.prom = [] 
+                    self.prom = []
+                    self.last_move = {'from': None, 'to': self.board[y][x].name, 'type': 'drop', 'piece': p}
                 else:
                     self.board = deepcopy(old)
-                    
-    def play(self,move):
-        if self.isBActive():
+
+    def play(self, move):
+        if self.active:
             if move in self.legal:
-                if move[0]!='O':
-                    move = [int(move[1])-1,ord(move[0])-97,int(move[3])-1,ord(move[2])-97]
+                move_meta = {'from': None, 'to': None, 'type': 'move'}
+                if move[0] != 'O':
+                    move = [int(move[1]) - 1, ord(move[0]) - 97, int(move[3]) - 1, ord(move[2]) - 97]
                     if self.isCapture(move):
-                        print('capture')
-                        self.partner.pool.append(self.board[move[2]][move[3]].piece.name())
+                        self.otpool.append(self.board[move[2]][move[3]].piece.name())
+                    move_meta['from'] = self.board[move[0]][move[1]].name
+                    move_meta['to'] = self.board[move[2]][move[3]].name
+                else:
+                    move_meta['type'] = 'castle'
+                    move_meta['from'] = 'e1' if self.wmove else 'e8'
+                    if move == 'O-O':
+                        move_meta['to'] = 'g1' if self.wmove else 'g8'
+                    else:
+                        move_meta['to'] = 'c1' if self.wmove else 'c8'
                 self.playraw(move)
                 self.wmove = not self.wmove
                 self.ep = '-'
-                self.prom = []  
-                if type(move)==list and self.board[move[2]][move[3]].piece.name().lower()=='p' and abs(move[2]-move[0])==2:
+                self.prom = []
+                if type(move) == list and self.board[move[2]][move[3]].piece.name().lower() == 'p' and abs(move[2] - move[0]) == 2:
                     dir = 1 if self.wmove else -1
-                    self.ep = (move[2]+dir,move[3])   
-                self.moves.append(move)    
-            elif move[:-1]+"Prom" in self.legal:
+                    self.ep = (move[2] + dir, move[3])
+                self.moves.append(move)
+                self.last_move = move_meta
+            elif move[:-1] + "Prom" in self.legal:
+                move_meta = {'from': move[:2], 'to': move[2:4], 'type': 'promotion', 'promotion': move[-1]}
                 self.promotion(move)
                 self.moves.append(move)
-            elif move[1]=='@' and len(move)==4:
+                self.last_move = move_meta
+            elif move[1] == '@' and len(move) == 4:
                 piece = move[0] if self.wmove else move[0].lower()
                 if piece in self.pool:
-                    self.place(piece,ord(move[2])-97,int(move[3])-1)
-            self.isActive()
-        elif self.active:
-            self.result = not self.partner.result
-            #self.active = False
-            
-class BugBoardPair:
-    def __init__(self, fen='rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 -'):
-        self.board1 = BugBoard(fen)
-        self.board2 = BugBoard(fen)
-        self.board1.partner = self.board2
-        self.board2.partner = self.board1
-    
-    def get_boards(self):
-        return self.board1, self.board2
+                    self.place(piece, ord(move[2]) - 97, int(move[3]) - 1)
+        self.isActive()
 
-# Usage:
+
+# verify checks
+class BugBoards:
+    def __init__(self, FEN='rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 -'):
+        self.boards = [Board(FEN), Board(FEN)]
+        self.result = []
+        self.active = self.boards[0].active and self.boards[1].active
+
+    def play(self, move, board):
+        if self.active:
+            self.boards[board].play(move)
+            self.boards[board ^ 1].pool.extend(self.boards[board].otpool)
+            self.boards[board].otpool = []
+            self.active = self.boards[0].active and self.boards[1].active
+        else:
+            self.result = [board.result for board in self.boards]
+
+    def display(self):
+        for Board in self.boards:
+            for row in reversed(Board.board):
+                print('|'.join(square.piece.name() if square.occupied else '•' for square in row))
+            print()
+
+    def grid(self):
+        return [[[square.piece.name() if square.occupied else '•' for square in row] for row in board] for board in self.boards]
+
+    def pools(self):
+        return [board.pool for board in self.boards]
+
+    def legalmoves(self):
+        return [board.legalmoves() for board in self.boards]
+
+    def checks(self):
+        return [board.incheck() for board in self.boards]
+
+    def last_moves(self):
+        return [board.last_move for board in self.boards]
+
+
 if __name__ == "__main__":
     pair = BugBoardPair()
     board1, board2 = pair.get_boards()
@@ -133,7 +171,5 @@ if __name__ == "__main__":
     for move, board_index in moves:
         boards[board_index].play(move)
         print(f"\nAfter move {move} on board {board_index}:")
-        board1.displayboard()
-        print('\n'*2)
-        board2.displayboard()
-        print(board1.isBActive())
+        bughouse_game.display()
+        print(bughouse_game.active)
