@@ -4,14 +4,16 @@ from flask_login import LoginManager,login_user,logout_user,current_user,login_r
 from models import Player,Game
 from static.forms import LoginForm, RegistrationForm
 from chess import Board
-from bug import BugBoards
+from bug import BugBoardPair
 from config import app,db
 from time import perf_counter
+import os,glob
 
 boards = {}
-vboards = {}
+bboards = {}
 deletelist = {}
 anon = [1]
+activeg = [0]
 socketio = SocketIO(app, manage_session=False)
 
 with app.app_context():
@@ -87,6 +89,11 @@ def game():
     if 'game' in session and session['game'][1] in boards and session['game'][0] in boards[session['game'][1]]:
         return render_template('game.html')
     return redirect(url_for('index'))
+@app.route('/bgame')
+def bgame():
+    if 'game' in session and session['game'][1] in bboards and session['game'][0] in bboards[session['game'][1]]:
+        return render_template('bgame.html')
+    return redirect(url_for('index'))
 
 @socketio.on('connect')
 def handle_connect():
@@ -116,9 +123,10 @@ def pair(request):
     increment = request['data'][1]
     session['increment'] = increment
     def create_board(authenticated):
-        games = Game.query.count() + 1 + sum(len(boards[x]) for x in boards)
+        activeg[0]+=1
+        games = Game.query.count() + activeg[0]
         user_id = current_user.id if authenticated else session['id']
-        boards.setdefault(time, {})[games] = [authenticated, None, user_id, None, session['username'], time*60, time*60, increment, Board()]
+        boards.setdefault(time, {})[games] = [authenticated, None, user_id, None, session['username'], time*60, time*60, increment, Board(), False]
         session['game'] = [games, time]
         session['pieces'] = False
         join_room('waiting' + str(games))
@@ -149,34 +157,55 @@ def bugmatch(request):
     session['increment'] = increment
     
     def create_board(authenticated):
-        games = Game.query.count() + 1 + sum(len(boards[x]) for x in boards)
+        activeg[0]+=1
+        games = Game.query.count() + activeg[0]
         user_id = current_user.id if authenticated else session['id']
-        boards.setdefault(time, {})[games] = [authenticated, [user_id], [session['username']],[], [time*60,time*60], [time*60,time*60], increment, BugBoards()]
+        
+        # Create paired boards
+        board_pair = BugBoardPair()
+        board1, board2 = board_pair.get_boards()
+        
+        bboards.setdefault(time, {})[games] = [authenticated, [user_id], [session['username']],[], [time*60,time*60], [time*60,time*60], increment, board1, board2]
         session['game'] = [games, time]
         session['pieces'] = False
-        join_room('waiting' + str(games))
+        join_room('bwaiting' + str(games))
         
     if 'game' in session:
-        if session['game'][1] in boards and session['game'][0] in boards[session['game'][1]]:
-            boards[session['game'][1]].pop(session['game'][0], None)
+        if session['game'][1] in bboards and session['game'][0] in bboards[session['game'][1]]:
+            bboards[session['game'][1]].pop(session['game'][0], None)
         session.pop('game', None)
-    if time in vboards.setdefault('bug', {}):
-        match = [x for x in boards[time] if boards[time][x][0] == current_user.is_authenticated and len(boards[time][x][0]) < 4 and boards[time][x][6]==increment]
+    if time in bboards:
+        match = [x for x in bboards[time] if bboards[time][x][0] == current_user.is_authenticated and len(bboards[time][x][1]) < 4 and bboards[time][x][6]==increment]
         if match:
-            y = boards[time][match[0]]
-            y[0] += [current_user.id] if current_user.is_authenticated else [session['id']]
-            pw = len(y[0])
+            y = bboards[time][match[0]]
+            y[1] += [current_user.id] if current_user.is_authenticated else [session['id']]
+            pw = len(y[1])
             #2 -> 1  3->0 4->1
             y[pw//3 + 2].append(session['username'])
-            session['game'] = [match[0], time]
+            session['game'] = [match[0]+(pw-1)//2, time]
             session['pieces'] = pw%2==0
-            join_room('waiting' + str(match[0]))
+            join_room('waitingb' + str(match[0]))
             if pw==4:
-                socketio.emit('redirect', url_for('game'), room='waiting' + str(match[0]))
+                #split into regular boards
+                game_id = match[0]
+                bug_record = y
+                
+                # Create two normal board records with bughouse flag
+                boards.setdefault(time, {})[game_id] = [bug_record[0], bug_record[1][1], bug_record[1][0], bug_record[2][1], bug_record[2][0], bug_record[4][0], bug_record[5][1], bug_record[6], bug_record[7], True]
+                boards.setdefault(time, {})[game_id + 1] = [bug_record[0], bug_record[1][3], bug_record[1][2], bug_record[3][1], bug_record[3][0], bug_record[4][1], bug_record[5][0], bug_record[6], bug_record[8], True]
+                
+                # Remove bugboard record
+                bboards[time].pop(game_id, None)
+                
+                socketio.emit('redirect', url_for('game'), room='waitingb' + str(match[0]))
+                socketio.emit('redirect', url_for('game'), room='waitingb' + str(match[0]-1))
+            print(bboards)
         else:
             create_board(current_user.is_authenticated)
     else:
+        print('cb1')
         create_board(current_user.is_authenticated)
+        
 
 
 @socketio.on('move')
@@ -288,7 +317,7 @@ def challenge_friend(friend_username):
     if user.is_authenticated:
         friend = Player.query.filter_by(username=friend_username).first()
         games = Game.query.count() + 1 + sum(len(boards[x]) for x in boards)
-        boards.setdefault('challenge', {})[games] = [True,friend.id, user.id,friend_username, session['username'],600,600,0, Board()]
+        boards.setdefault('challenge', {})[games] = [True,friend.id, user.id,friend_username, session['username'],600,600,0, Board(), False]
         session['game'] = [games, 'challenge']
         session['pieces'] = False
         session['friend'] = friend_username
@@ -301,7 +330,7 @@ def challenge_again():
     friend_username = session['friend']
     games = Game.query.count() + 1 + sum(len(boards[x]) for x in boards)
     friend = Player.query.filter_by(username=friend_username).first()
-    boards.setdefault('challenge', {})[games] = [True,friend.id, user.id,friend_username, session['username'],600,600,0, Board()]
+    boards.setdefault('challenge', {})[games] = [True,friend.id, user.id,friend_username, session['username'],600,600,0, Board(), False]
     socketio.emit('redirect', url_for('game'), room=request.sid)
     socketio.emit('challenge', room=friend.id)
     session['game'] = [games, 'challenge']
@@ -309,5 +338,6 @@ def challenge_again():
     
 
 if __name__ == "__main__":
+    [os.remove(f) for f in glob.glob("flask_session/*") if os.path.isfile(f)]
     socketio.run(app ,port=6500, debug=True)
-    #socketio.run(app,host='0.0.0.0',port=6500, debug=True) 
+    #socketio.run(app,host='0.0.0.0',port=6500, debug=True)

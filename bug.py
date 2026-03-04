@@ -1,22 +1,26 @@
 #we need to know when captures have been made
 #we need to be able to place
+#verify checks
+#at fault var
 from chess import *
 
 
-class Board(Board):
+class BugBoard(Board):
     def __init__(self,FEN='rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 -'):
         self.K = (None,None)
         self.k = (None,None)
         self.FEN = FEN
         self.board,self.wmove, self.wcast, self.bcast,self.ep,self.fifty, self.movenum,self.pool = self.loadFEN(FEN)
-        print(self.pool,self.movenum)
         self.moves = []
-        self.otpool = []
         self.result = None
         self.prom = []
         self.legal = []
         self.active = True
+        self.partner = None
         self.isActive()
+    
+    def isBActive(self):
+        return self.active and self.partner.active
     def loadFEN(self, FEN):
         grid = [[Square(f'{chr(97+x)}{y+1}') for x in range(8)] for y in range(8)]
         FEN = split('[/ ]', FEN)
@@ -58,13 +62,13 @@ class Board(Board):
                     self.board = deepcopy(old)
                     
     def play(self,move):
-        if self.active:
+        if self.isBActive():
             if move in self.legal:
                 if move[0]!='O':
                     move = [int(move[1])-1,ord(move[0])-97,int(move[3])-1,ord(move[2])-97]
                     if self.isCapture(move):
                         print('capture')
-                        self.otpool.append(self.board[move[2]][move[3]].piece.name())
+                        self.partner.pool.append(self.board[move[2]][move[3]].piece.name())
                 self.playraw(move)
                 self.wmove = not self.wmove
                 self.ep = '-'
@@ -80,37 +84,32 @@ class Board(Board):
                 piece = move[0] if self.wmove else move[0].lower()
                 if piece in self.pool:
                     self.place(piece,ord(move[2])-97,int(move[3])-1)
-        self.isActive()
-#verify checks
-class BugBoards:
-    def __init__(self,FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 -'):
-        self.boards = [Board(FEN),Board(FEN)]
-        self.result = []
-        self.active = self.boards[0].active and self.boards[1].active
-    def play(self,move,board):
-        if self.active:
-            self.boards[board].play(move)
-            self.boards[board^1].pool.extend(self.boards[board].otpool)
-            self.boards[board].otpool = []
-            self.active = self.boards[0].active and self.boards[1].active
-        else:
-            self.result = [board.result for board in self.boards]
-    def display(self):
-        for Board in self.boards:
-            for row in reversed(Board.board):
-                print('|'.join(square.piece.name() if square.occupied else '•' for square in row))
-            print()
-    def grid(self):
-        return [[[square.piece.name() if square.occupied else '•' for square in row] for row in board] for board in self.boards]
+            self.isActive()
+        elif self.active:
+            self.result = not self.partner.result
+            #self.active = False
+            
+class BugBoardPair:
+    def __init__(self, fen='rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 -'):
+        self.board1 = BugBoard(fen)
+        self.board2 = BugBoard(fen)
+        self.board1.partner = self.board2
+        self.board2.partner = self.board1
+    
+    def get_boards(self):
+        return self.board1, self.board2
+
+# Usage:
 if __name__ == "__main__":
-    # Initialize the bughouse game
-    bughouse_game = BugBoards()
+    pair = BugBoardPair()
+    board1, board2 = pair.get_boards()
 
     # Display initial state
     print("Initial state:")
-    bughouse_game.display()
-
-    # Simulate a sequence of moves
+    board1.displayboard()
+    print('\n'*2)
+    board2.displayboard()
+    boards = [board1,board2]
     """
     moves = [
         ("e2e4", 0),("e2e4", 1),("d7d5", 0),("d7d5", 1),("e4d5", 0),("a7a5",0),("p@d7",1)
@@ -132,7 +131,9 @@ if __name__ == "__main__":
     ]
     
     for move, board_index in moves:
-        bughouse_game.play(move, board_index)
+        boards[board_index].play(move)
         print(f"\nAfter move {move} on board {board_index}:")
-        bughouse_game.display()
-        print(bughouse_game.active)
+        board1.displayboard()
+        print('\n'*2)
+        board2.displayboard()
+        print(board1.isBActive())
