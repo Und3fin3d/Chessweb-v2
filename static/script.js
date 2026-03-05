@@ -5,7 +5,18 @@ const socket = io()
 socket.on('redirect', (dest) => {
     window.location = dest
 })
-document.body.style.backgroundColor = background
+
+function applyTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme)
+    localStorage.setItem('theme', theme)
+    document.querySelectorAll('.theme-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.theme === theme)
+    })
+}
+
+// Apply saved theme immediately (before paint)
+applyTheme(localStorage.getItem('theme') || 'minimal')
+
 document.getElementById("menu").style.opacity = "1"
 
 window.scrollTo(0, 0)
@@ -15,11 +26,12 @@ tab(0)
 function tab(new_tab){
     document.getElementsByClassName('tab')[cur_tab].classList.remove("active")
     document.getElementsByClassName('tab')[new_tab].classList.add("active")
+    let vals = document.getElementsByClassName("val")
     if (new_tab != cur_tab){
         let nam = document.getElementsByClassName("tab")[new_tab].dataset.name
         let type = document.getElementsByClassName("tab")[new_tab].dataset.type
-        let vals = document.getElementsByClassName("val")
         vals[cur_tab].style.opacity = "0"
+        vals[cur_tab].classList.remove("active")
         setTimeout(function(){
             vals[cur_tab].style.display = "none"
             document.getElementById(nam).style.display = type
@@ -28,8 +40,11 @@ function tab(new_tab){
         }, 200)
         setTimeout(function(){
             vals[new_tab].style.opacity = "1"
+            vals[new_tab].classList.add("active")
         }, 300)
-    }   
+    } else {
+        vals[new_tab].classList.add("active")
+    }
 }
 
 function startGame(time){
@@ -197,12 +212,13 @@ else{
 }
 
 let custom = document.getElementById("custom")
+let boardArea = document.getElementById("custom-board-area")
 let board = document.getElementsByClassName("chessboard")[0]
-let spares = document.getElementsByClassName("spare")
-custom.appendChild(board)
-Array.from(spares).forEach(spare => {
-    custom.appendChild(spare)
-})
+let topSpare = document.getElementById("top")
+let botSpare = document.getElementById("bot")
+boardArea.appendChild(topSpare)
+boardArea.appendChild(board)
+boardArea.appendChild(botSpare)
 if (loggedin){
     socket.emit("getFriendList")
 }

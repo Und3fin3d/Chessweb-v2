@@ -12,8 +12,8 @@
         <div id="menu">
             <div class="tab" data-name="pair" data-type="flex" onclick="tab(0)">Pairing</div>
             <div class="tab" data-name='lobby' data-type='block' onclick="tab(1)">Lobby</div>
-            <div class="tab" data-name='custom' data-type='block' onclick="tab(2)">Customise</div>
-            <div class="tab" data-name='friends' data-type='block' onclick="tab(3)">Friends</div>
+            <div class="tab" data-name='custom' data-type='grid' onclick="tab(2)">Customise</div>
+            <div class="tab" data-name='friends' data-type='flex' onclick="tab(3)">Friends</div>
             <div class="tab" data-name='profile' data-type='block' onclick="tab(4)">Profile</div>
         </div>
 
@@ -39,47 +39,85 @@
                 </div>
             </div>
             <div id="lobby" class="lobby val" style="display:none;"></div>
-            <div id="custom" class="custom val" style="display:none;transform: translateY(10vh);">
-                <div id="custom-controls" style="margin-bottom: 20px; padding: 15px; background: #1a1a1a; border-radius: 8px;">
-                    <h3 style="margin-bottom: 15px; color: #fff;">Create Custom Game</h3>
-                    <div style="display: flex; gap: 15px; flex-wrap: wrap; align-items: center; margin-bottom: 15px;">
-                        <label style="color: #ccc;">Time Control:</label>
-                        <select id="customTimeControl" style="padding: 8px; background: #2a2a2a; color: #fff; border: 1px solid #444; border-radius: 4px;">
-                            <option value="1">1 minute</option>
-                            <option value="3">3 minutes</option>
-                            <option value="5" selected>5 minutes</option>
-                            <option value="10">10 minutes</option>
-                            <option value="15">15 minutes</option>
-                            <option value="30">30 minutes</option>
-                        </select>
-                        <label style="color: #ccc;">Increment:</label>
-                        <select id="customIncrement" style="padding: 8px; background: #2a2a2a; color: #fff; border: 1px solid #444; border-radius: 4px;">
-                            <option value="0" selected>0 seconds</option>
-                            <option value="1">1 second</option>
-                            <option value="2">2 seconds</option>
-                            <option value="3">3 seconds</option>
-                            <option value="5">5 seconds</option>
-                            <option value="10">10 seconds</option>
+            <div id="custom" class="custom val" style="display:none;">
+                <div id="custom-board-area">
+                    <!-- spare banks and chessboard inserted here by JS -->
+                </div>
+                <div id="custom-controls">
+                    <p class="custom-controls-title">Create Game</p>
+                    <div class="custom-controls-row">
+                        <label>Time</label>
+                        <select id="customTimeControl">
+                            <option value="1">1 min</option>
+                            <option value="3">3 min</option>
+                            <option value="5" selected>5 min</option>
+                            <option value="10">10 min</option>
+                            <option value="15">15 min</option>
+                            <option value="30">30 min</option>
                         </select>
                     </div>
-                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                        <button onclick="createCustomGame()" class="game-square" style="background: #4CAF50; border: none; cursor: pointer; padding: 12px 24px;">Create Game</button>
-                        <button onclick="resetBoard()" class="game-square" style="background: #2196F3; border: none; cursor: pointer; padding: 12px 24px;">Reset Board</button>
-                        <button onclick="clearBoard()" class="game-square" style="background: #f44336; border: none; cursor: pointer; padding: 12px 24px;">Clear Board</button>
+                    <div class="custom-controls-row">
+                        <label>Inc</label>
+                        <select id="customIncrement">
+                            <option value="0" selected>0s</option>
+                            <option value="1">1s</option>
+                            <option value="2">2s</option>
+                            <option value="3">3s</option>
+                            <option value="5">5s</option>
+                            <option value="10">10s</option>
+                        </select>
+                    </div>
+                    <div class="custom-controls-btns">
+                        <button onclick="createCustomGame()" class="ctrl-btn create">Create</button>
+                        <button onclick="resetBoard()" class="ctrl-btn reset">Reset</button>
+                        <button onclick="clearBoard()" class="ctrl-btn clear">Clear</button>
                     </div>
                 </div>
             </div>
-            <div id="friends" class="val" style="display: none; transform: translate(20vw,10vh); opacity: 1;">
-                <h2>Play with Friends</h2>
-                <div class="friend-square" onclick="playRoundRobin()" style="max-width: none;height: 20vh;width: 50vw;">Round Robin</div>
-                <select id="choices-multiple-remove-button" class = "Robin" placeholder="Select friends for Round Robin:"multiple></select> 
-                <div class="friend-square" onclick="playBughouse()" style="max-width: none;height: 20vh;width: 50vw;">Bughouse</div>
-                <select id="choices-multiple-remove-button" class = "Bug" placeholder="Select friends for Round Robin:"multiple></select> 
-                <div class="friend-square" onclick="playChallenge()" style="max-width: none;height: 20vh;width: 50vw;">Challenge</div>
-                <label for="friendSelect">Select a friend to Challenge:</label>
-                <select id="friendSelect" class="selectpicker" data-live-search="true"></select><br><br>
-                <input type="text" id="friendUsername" placeholder="Enter username" style="width: 60vw;margin-bottom: 5%;font-size: 2vmin;">
-                <input id="submit" type="submit" onclick="sendFriendRequest()" value="Send Friend Request" style="font-size: 2vmin;">
+            <div id="friends" class="friends-panel val" style="display: none;">
+                <h2 style="margin: 0 0 1.5rem 0;">Play with Friends</h2>
+
+                <div class="friends-card">
+                    <div class="friends-card-header" onclick="playRoundRobin()">
+                        <span>Round Robin</span>
+                        <span class="friends-card-arrow">→</span>
+                    </div>
+                    <p class="friends-card-desc">A tournament where every selected player faces each other</p>
+                    <select class="Robin" multiple>
+                        <option value="" disabled>Choose friends to include...</option>
+                    </select>
+                </div>
+
+                <div class="friends-card">
+                    <div class="friends-card-header" onclick="playBughouse()">
+                        <span>Bughouse</span>
+                        <span class="friends-card-arrow">→</span>
+                    </div>
+                    <p class="friends-card-desc">4-player team variant — select 3 friends to join you</p>
+                    <select class="Bug" multiple>
+                        <option value="" disabled>Choose 3 friends...</option>
+                    </select>
+                </div>
+
+                <div class="friends-card">
+                    <div class="friends-card-header" onclick="playChallenge()">
+                        <span>Challenge</span>
+                        <span class="friends-card-arrow">→</span>
+                    </div>
+                    <p class="friends-card-desc">Send a direct 1v1 challenge to a friend</p>
+                    <select id="friendSelect">
+                        <option value="" disabled selected>Select a friend to challenge...</option>
+                    </select>
+                </div>
+
+                <div class="friends-card">
+                    <p class="friends-card-title">Add Friend</p>
+                    <p class="friends-card-desc">Send a friend request by username</p>
+                    <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+                        <input type="text" id="friendUsername" placeholder="Enter username..." style="margin-bottom: 0; flex: 1; min-width: 0;">
+                        <input id="submit" type="submit" onclick="sendFriendRequest()" value="Send Request" style="flex-shrink: 0; white-space: nowrap;">
+                    </div>
+                </div>
             </div>
             <div id="profile" class="profile val" style="display:none;">
                 <div id="name"></div>
@@ -91,6 +129,23 @@
                     - Losses: {{ user.losses }}<br>
                     - Draws: {{ user.draws }}<br>
                     - Rating: {{ user.rating }}<p></p>
+                </div>
+                <div class="sect">
+                    <p class="title">Theme</p>
+                    <div class="theme-row">
+                        <button class="theme-btn" data-theme="minimal" onclick="applyTheme('minimal')">
+                            <span class="swatch" style="background:#22c55e;"></span> Minimal
+                        </button>
+                        <button class="theme-btn" data-theme="classic" onclick="applyTheme('classic')">
+                            <span class="swatch" style="background:#d4a017;"></span> Classic
+                        </button>
+                        <button class="theme-btn" data-theme="navy" onclick="applyTheme('navy')">
+                            <span class="swatch" style="background:#3b82f6;"></span> Navy
+                        </button>
+                        <button class="theme-btn" data-theme="wood" onclick="applyTheme('wood')">
+                            <span class="swatch" style="background:#e63946;"></span> Wood
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>

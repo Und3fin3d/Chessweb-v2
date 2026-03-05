@@ -3,6 +3,7 @@ const sq_rev = {'a': 0, 'b': 1, 'c': 2, 'd': 3, 'e': 4, 'f': 5, 'g': 6, 'h': 7};
 let beingDragged;
 let lastX;
 let lastY;
+let dropped = false;
 function init(pieces){
 let ChessBoard = document.createElement('div');
 ChessBoard.setAttribute('class','chessboard');
@@ -59,7 +60,11 @@ for (let i = 0; i <8; i++){
             img.src = "../static/images/" + board[i][j]+".svg";
             img.addEventListener('dragstart',function(e){
                 beingDragged = e.target;
-                start = e.target.parentNode.id
+                start = e.target.parentNode.id;
+                dropped = false;
+            });
+            img.addEventListener('dragend', function(e){
+                if (!dropped) img.remove();
             });
             img.addEventListener('touchstart', function(e) {
                 beingDragged = img;
@@ -68,22 +73,26 @@ for (let i = 0; i <8; i++){
             });
             img.addEventListener("touchmove", function(e) {
                 e.preventDefault();
-                lastX =e.touches[0].clientX 
+                lastX =e.touches[0].clientX
                 lastY = e.touches[0].clientY
                 img.style.left=e.touches[0].clientX-img.width/2+"px";
                 img.style.top=e.touches[0].clientY-img.height/2+"px";
             });
             img.addEventListener("touchend", function(e) {
-                e.preventDefault()
+                e.preventDefault();
                 img.style.zIndex = "";
-                let sq = document.elementsFromPoint(lastX,lastY)[1]
-                if (sq.tagName=="IMG"){
-                    sq = sq.parentNode
+                let target = document.elementsFromPoint(lastX, lastY)[1];
+                if (target && target.tagName == "IMG") {
+                    target = target.parentNode;
                 }
-                sq.textContent = '';
-                sq.append(img)
-                img.style.left = "50%"
-                img.style.top = "50%"
+                if (target && target.classList && target.classList.contains('square')) {
+                    target.textContent = '';
+                    target.append(img);
+                    img.style.left = "50%";
+                    img.style.top = "50%";
+                } else {
+                    img.remove();
+                }
             });
             square.appendChild(img);
         }
@@ -120,16 +129,21 @@ pieces.forEach(piece => {
         img.style.top=e.touches[0].clientY-img.height/2+"px";
     });
     img.addEventListener("touchend", function(e) {
-        e.preventDefault()
+        e.preventDefault();
         img.style.zIndex = "";
-        let sq = document.elementsFromPoint(lastX,lastY)[1]
-        if (sq.tagName=="IMG"){
-            sq = sq.parentNode
+        let target = document.elementsFromPoint(lastX, lastY)[1];
+        if (target && target.tagName == "IMG") {
+            target = target.parentNode;
         }
-        sq.textContent = '';
-        sq.append(img)
-        img.style.left = "50%"
-        img.style.top = "50%"
+        if (target && target.classList && target.classList.contains('square')) {
+            target.textContent = '';
+            target.append(img);
+            img.style.left = "50%";
+            img.style.top = "50%";
+        } else {
+            img.style.left = "";
+            img.style.top = "";
+        }
     });
     spare.appendChild(img);
 })
@@ -140,6 +154,7 @@ init(false)
 let squares = document.querySelectorAll('.square')
 squares.forEach(square => {
     square.addEventListener('drop',function(e){
+    dropped = true;
     square.textContent = '';
     square.append(beingDragged)
     });
