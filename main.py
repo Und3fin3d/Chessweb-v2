@@ -153,8 +153,9 @@ def ensure_identity():
         if g.pop('remembered_login', False) or 'id' in session:
             leave_current_game()
             session.pop('id', None)
-            socketio.expire_session(session.sid)
+            sid = session.sid
             app.session_interface.regenerate(session)
+            socketio.expire_session(sid)
         session['username'] = current_user.username
     else:
         if session.pop('_user_id', None) is not None:
@@ -233,8 +234,9 @@ def signin():
             return redirect(url_for('signin'))
         leave_current_game()
         session.pop('id', None)
-        socketio.expire_session(session.sid)
+        sid = session.sid
         start_login(user, remember=form.remember_me.data)
+        socketio.expire_session(sid)
         ensure_identity()
         return redirect(url_for('index'))
     return render_template('login.html', title='Sign In', form=form)
@@ -242,6 +244,8 @@ def signin():
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
     form = RegistrationForm()
     if form.validate_on_submit():
         user = Player(username=form.username.data, email=form.email.data)
@@ -250,8 +254,9 @@ def register():
         db.session.commit()
         leave_current_game()
         session.pop('id', None)
-        socketio.expire_session(session.sid)
+        sid = session.sid
         start_login(user, remember=False)
+        socketio.expire_session(sid)
         ensure_identity()
         return redirect(url_for('index'))
     return render_template('register.html', title='Register', form=form)
@@ -260,13 +265,14 @@ def register():
 @app.route('/logout')
 def logout():
     leave_current_game()
-    socketio.expire_login(session.get('_user_id'))
     revoke_login()
-    socketio.expire_session(session.sid)
+    socketio.expire_login(session.get('_user_id'))
+    sid = session.sid
     logout_user()
     session['_remember'] = 'clear'
     ensure_identity()
     app.session_interface.regenerate(session)
+    socketio.expire_session(sid)
     return redirect(url_for('index'))
 
 
@@ -298,7 +304,7 @@ def bgame():
 
 
 @socketio.on('connect')
-def handle_connect():
+def handle_connect(auth=None):
     if current_user.is_authenticated:
         join_room(current_user.id)
 

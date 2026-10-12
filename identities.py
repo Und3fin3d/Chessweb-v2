@@ -1,5 +1,6 @@
 from datetime import timedelta
 from secrets import token_urlsafe
+from threading import Lock
 from time import time
 
 from flask import current_app, g, request, session
@@ -42,6 +43,9 @@ def revoke_login():
     if token is not None:
         db.session.execute(db.delete(LoginToken).where(LoginToken.id == token))
         db.session.commit()
+        backend = current_app.session_interface
+        with backend.lock:
+            backend.revoked.add(token)
 
 
 def allocate_guest():
@@ -55,8 +59,15 @@ class SessionLoginManager(LoginManager):
     def _load_user_from_remember_cookie(self, cookie):
         if hasattr(request, 'sid'):
             return None
+        token = session.get('_user_id')
         player = super()._load_user_from_remember_cookie(cookie)
-        if player is not None:
+        if player is None:
+            session['_remember'] = 'clear'
+            if token is None:
+                session.pop('_user_id', None)
+            else:
+                session['_user_id'] = token
+        else:
             g.remembered_login = True
         return player
 
@@ -64,6 +75,9 @@ class SessionLoginManager(LoginManager):
 class SessionStore:
     def __init__(self, backend):
         self.backend = backend
+        self.lock = Lock()
+        self.retired = set()
+        self.revoked = set()
 
     def __getattr__(self, name):
         return getattr(self.backend, name)
@@ -76,18 +90,34 @@ class SessionStore:
     def cache(self, cache):
         self.backend.cache = cache
 
-    def save_session(self, app, state, response):
+    def stale(self, state):
         token = state.get('_user_id')
-        if token is not None and valid_login(token) is None:
+        return token is not None and valid_login(token) is None
+
+    def blocked(self, state):
+        return state.sid in self.retired or state.get('_user_id') in self.revoked
+
+    def regenerate(self, state):
+        with self.lock:
+            sid = state.sid
+            self.backend.regenerate(state)
+            if state.sid != sid:
+                self.retired.add(sid)
+
+    def save_session(self, app, state, response):
+        if self.stale(state):
             return
-        self.backend.save_session(app, state, response)
+        with self.lock:
+            if not self.blocked(state):
+                self.backend.save_session(app, state, response)
 
 
 class SessionSocketIO(SocketIO):
     def expire_room(self, room):
-        clients = list(self.server.manager.get_participants('/', room))
-        for sid, _ in clients:
-            self.server.disconnect(sid, namespace='/')
+        with current_app.session_interface.lock:
+            clients = list(self.server.manager.get_participants('/', room))
+            for sid, _ in clients:
+                self.server.disconnect(sid, namespace='/')
 
     def expire_session(self, session_id):
         self.expire_room('session:' + session_id)
@@ -96,21 +126,37 @@ class SessionSocketIO(SocketIO):
         if token is not None:
             self.expire_room('login:' + token)
 
+    def connect_session(self, handler, namespace, sid, values):
+        backend = current_app.session_interface
+        if backend.stale(session):
+            return False
+        with backend.lock:
+            if backend.blocked(session):
+                return False
+            try:
+                self.server.enter_room(sid, 'session:' + session.sid, namespace=namespace)
+                if current_user.is_authenticated:
+                    self.server.enter_room(sid, 'login:' + session['_user_id'], namespace=namespace)
+                return handler(*values)
+            except (KeyError, ValueError):
+                if self.server.manager.is_connected(sid, namespace):
+                    raise
+                return False
+
     def _handle_event(self, handler, message, namespace, sid, *args):
         def authorised(*values):
             cookie = request.cookies.get(current_app.config['SESSION_COOKIE_NAME'])
             backend = current_app.session_interface
             expected = backend._sign(current_app, session.sid) if backend.use_signer else session.sid
             identity = current_user.is_authenticated or session.get('id') is not None
-            if cookie != expected or not identity or (session.get('_user_id') and not current_user.is_authenticated):
-                if message != 'connect':
-                    self.emit('error', {'message': 'Session expired - please reload the page.'}, room=sid)
+            if cookie != expected or not identity or backend.blocked(session) or (session.get('_user_id') and not current_user.is_authenticated):
+                if message == 'connect':
+                    return False
+                self.server.disconnect(sid, namespace=namespace)
                 return
             self.identity_handler()
             if message == 'connect':
-                self.server.enter_room(sid, 'session:' + session.sid, namespace=namespace)
-                if current_user.is_authenticated:
-                    self.server.enter_room(sid, 'login:' + session['_user_id'], namespace=namespace)
+                return self.connect_session(handler, namespace, sid, values)
             return handler(*values)
 
         return super()._handle_event(authorised, message, namespace, sid, *args)
