@@ -108,7 +108,7 @@ spare.innerHTML = ''
 spare.id = i
 pieces.forEach(piece => {
     let img = document.createElement('img');
-    img.id = "sp"
+    img.id = piece
     img.src = "../static/images/" + piece+".svg";
     img.addEventListener('dragstart',function(e){
         beingDragged = e.target.cloneNode(true);
