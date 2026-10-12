@@ -6,6 +6,7 @@
     </head>
     <body>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+        <script src="{{ url_for('static', filename='session.js') }}"></script>
         <script>let colour = {{session|tojson}}.pieces</script>
         <script>let sess = {{session|tojson}}</script>
         <div class="sec" id="t">

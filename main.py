@@ -135,7 +135,12 @@ def load_user(user_id):
 def leave_current_game():
     if session.get('variant') == 'bughouse':
         cleanup_bug_session()
-    else:
+    elif 'game' in session:
+        room = 'game' + str(session['game'])
+        current = get_game_data()
+        if current and current[8].active:
+            socketio.emit('over', {'message': 'A player left the game.'}, room=room, skip_sid=getattr(request, 'sid', None))
+        socketio.server.close_room(room, namespace='/')
         cleanup_standard_session()
     reset_session_flags()
 
@@ -300,16 +305,7 @@ def handle_connect():
 
 @socketio.on('home')
 def home():
-    if session.get('variant') == 'bughouse':
-        cleanup_bug_session()
-    elif 'game' in session:
-        room = 'game' + str(session['game'])
-        current = get_game_data()
-        if current and current[8].active:
-            socketio.emit('over', {'message': 'A player left the game.'}, room=room, skip_sid=request.sid)
-        close_room(room)
-        cleanup_standard_session()
-    reset_session_flags()
+    leave_current_game()
     socketio.emit('redirect', url_for('index'), room=request.sid)
 
 

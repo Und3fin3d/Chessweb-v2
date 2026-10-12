@@ -1,7 +1,7 @@
 let background = '#121012'
 let text
 let tim
-const socket = io()
+const socket = connectSession()
 socket.on('redirect', (dest) => {
     window.location = dest
 })

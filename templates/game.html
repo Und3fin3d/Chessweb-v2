@@ -49,6 +49,7 @@
     <div id="overlay-root"></div>
     <div class="toast" id="game-toast"></div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script src="{{ url_for('static', filename='session.js') }}"></script>
     <script>
         window.gameMeta = {{ {
             'session': session,

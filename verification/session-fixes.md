@@ -39,3 +39,13 @@ The main checkout has pre-existing game changes that differ from GitHub's `main`
 The existing local `verification/check_sessions.py` failed before exploration because it accesses the removed `main.anon_free` pool. Its assumptions also require `_user_id` to be an account number, the guest name to contain the raw ID, and `_fresh` to equal authentication. Those assumptions no longer describe the implementation. No ordinary test was created or changed. This task does not report a passing bounded session search.
 
 Python compilation and the Agentic complexity check passed for the PR's Python and JavaScript files. The complexity tool does not support Lean. The broader checkout retains unrelated pre-existing findings. Production was not deployed.
+
+## Computer browser verification
+
+The PR source ran locally in Helium through the Computer tool, with isolated SQLite data, dummy accounts and separate test cookie names. Browser actions confirmed login and logout SID rotation, remember-only restoration with `_fresh=False`, rejection of copied cookies after logout, distinct guest identities, and bughouse-to-classic queue switching. The two registered players reached the same classic game. Logout in another tab preserved the opponent's independent login.
+
+The browser exposed two additional session problems. An old tab could show an indefinite pairing spinner after its socket disconnected. All three socket clients now use one shared connection helper that blocks the stale page with a reload action. Logout also removed the classic game without notifying its opponent. Classic departure notification and room closure now belong to the shared game cleanup path, which the Home handler also uses. Browser replays confirmed the reload action, the opponent departure notice and the return Home.
+
+The final browser replay reported no JavaScript warnings or errors.
+
+Full classic move verification remains blocked by an existing upstream issue: the initiation handler emits names and returns without the initial board update. Both players therefore see an empty board and `00:00` clocks. The same handler exists in the PR base. This session-focused change leaves it unchanged. The browser run did not verify a complete four-player bughouse game or a mobile viewport. Production was not tested.
