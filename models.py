@@ -27,6 +27,9 @@ class Player(db.Model, UserMixin):
                                  secondaryjoin=(friendship_table.c.friend_id == id),
                                  backref=db.backref('friends', lazy='dynamic'))
 
+    def get_id(self):
+        return self.login_token
+
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
 
@@ -50,6 +53,18 @@ class Player(db.Model, UserMixin):
         return self.friends.all()
     
         
+
+class GuestIdentity(db.Model):
+    __table_args__ = {'sqlite_autoincrement': True}
+
+    id = db.Column(db.Integer, primary_key=True)
+
+
+class LoginToken(db.Model):
+    id = db.Column(db.String(64), primary_key=True)
+    player_id = db.Column(db.Integer, db.ForeignKey('player.id'), nullable=False)
+    expires = db.Column(db.BigInteger, nullable=False)
+
 
 class Game(db.Model):
     __tablename__ = 'game'

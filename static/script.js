@@ -196,7 +196,7 @@ window.tab = function(new_tab) {
     }
 }
 
-let loggedin = sess._fresh
+let loggedin = sess.authenticated
 let profile = document.getElementById("profile")
 let login = document.getElementsByClassName("login")
 let username = document.getElementById("name")
