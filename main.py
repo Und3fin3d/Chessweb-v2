@@ -1,5 +1,5 @@
 from flask import render_template, redirect, url_for, session, request
-from flask_socketio import SocketIO, join_room
+from flask_socketio import SocketIO, join_room, close_room
 from flask_login import LoginManager, login_user, logout_user, current_user
 from models import Player, Game
 from static.forms import LoginForm, RegistrationForm
@@ -241,7 +241,12 @@ def handle_connect():
 def home():
     if session.get('variant') == 'bughouse':
         cleanup_bug_session()
-    else:
+    elif 'game' in session:
+        room = 'game' + str(session['game'])
+        current = get_game_data()
+        if current and current[8].active:
+            socketio.emit('over', {'message': 'A player left the game.'}, room=room, skip_sid=request.sid)
+        close_room(room)
         cleanup_standard_session()
     reset_session_flags()
     socketio.emit('redirect', url_for('index'), room=request.sid)
@@ -457,6 +462,7 @@ def update(request_payload):
             'move': game.wmove
         }, room=room_name)
         socketio.emit('over', room=room_name)
+        close_room(room_name)
         if current_user.is_authenticated:
             white_player = db.session.query(Player).get(current[2])
             black_player = db.session.query(Player).get(current[1])
@@ -498,6 +504,7 @@ def timeout():
             'move': game.wmove
         }, room=room_name)
         socketio.emit('over', room=room_name)
+        close_room(room_name)
         if current_user.is_authenticated:
             white_player = db.session.query(Player).get(current[2])
             black_player = db.session.query(Player).get(current[1])
