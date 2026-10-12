@@ -160,12 +160,21 @@ socketio.on('names',function(data){
   names[1].innerHTML = data.white
 })
 
-socketio.on('over', async function(){
+socketio.on('over', function(data){
+  clearTimeout(timer)
+  legalmoves = []
+  overlay.classList.remove('overlay')
+  promotion.remove()
   gameFinished = true
+  if (data && data.message){
+    document.querySelectorAll('.tim').forEach(clock => clock.textContent = '')
+    const status = document.getElementById('turn-indicator')
+    if (status) status.textContent = data.message
+  }
   if (againBtn){
     againBtn.disabled = false
   }
-  showToast('Game over')
+  showToast(data && data.message ? data.message : 'Game over')
   socketio.emit("over")
 })
 function send(move){

@@ -1,5 +1,5 @@
 from flask import render_template, redirect, url_for, session, request
-from flask_socketio import SocketIO, join_room
+from flask_socketio import SocketIO, join_room, leave_room
 from flask_login import LoginManager, login_user, logout_user, current_user
 from models import Player, Game
 from static.forms import LoginForm, RegistrationForm
@@ -239,6 +239,12 @@ def handle_connect():
 
 @socketio.on('home')
 def home():
+    if 'game' in session:
+        game_key, time_key = session['game']
+        board = boards.get(time_key, {}).get(game_key)
+        if board and isinstance(board[8], Board) and board[8].active:
+            socketio.emit('over', {'message': 'A player left the game.'}, room='game' + str(session['game']), skip_sid=request.sid)
+        leave_room('game' + str(session['game']))
     if session.get('variant') == 'bughouse':
         cleanup_bug_session()
     else:
@@ -249,6 +255,8 @@ def home():
 
 @socketio.on('over')
 def over():
+    if 'game' in session:
+        leave_room('game' + str(session['game']))
     if session.get('variant') == 'bughouse':
         cleanup_bug_session()
     else:
