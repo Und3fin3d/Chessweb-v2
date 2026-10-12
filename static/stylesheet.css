@@ -478,6 +478,19 @@ input[type='submit']:active {
   margin-bottom: 0;
 }
 
+@media (max-width: 600px) {
+  #menu {
+    flex-wrap: wrap;
+  }
+  .tab {
+    flex: 1 1 30%;
+    box-sizing: border-box;
+    padding: 0.85rem 0.25rem;
+    font-size: 0.8rem;
+    letter-spacing: 0.08em;
+  }
+}
+
 @media (max-width: 768px) {
   .pair {
     margin-top: 4rem;
