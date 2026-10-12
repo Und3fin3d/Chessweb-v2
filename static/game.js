@@ -166,15 +166,16 @@ socketio.on('over', function(data){
   overlay.classList.remove('overlay')
   promotion.remove()
   gameFinished = true
-  if (data && data.message){
+  const message = data && data.message
+  if (message){
     document.querySelectorAll('.tim').forEach(clock => clock.textContent = '')
     const status = document.getElementById('turn-indicator')
-    if (status) status.textContent = data.message
+    if (status) status.textContent = message
   }
   if (againBtn){
     againBtn.disabled = false
   }
-  showToast(data && data.message ? data.message : 'Game over')
+  showToast(message || 'Game over')
   socketio.emit("over")
 })
 function send(move){
