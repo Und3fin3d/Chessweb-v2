@@ -153,9 +153,7 @@ def ensure_identity():
         if g.pop('remembered_login', False) or 'id' in session:
             leave_current_game()
             session.pop('id', None)
-            sid = session.sid
-            app.session_interface.regenerate(session)
-            socketio.expire_session(sid)
+            rotate_session()
         session['username'] = current_user.username
     else:
         if session.pop('_user_id', None) is not None:
@@ -168,6 +166,20 @@ def ensure_identity():
     session['authenticated'] = current_user.is_authenticated
     if 'game' in session and not owns_current_game():
         reset_session_flags()
+
+
+def rotate_session():
+    sid = session.sid
+    app.session_interface.regenerate(session)
+    socketio.expire_session(sid)
+
+
+def enter_account(user, remember):
+    leave_current_game()
+    session.pop('id', None)
+    start_login(user, remember)
+    rotate_session()
+    ensure_identity()
 
 
 def owns_current_game():
@@ -232,12 +244,7 @@ def signin():
         user = Player.query.filter_by(username=form.username.data).first()
         if user is None or not user.check_password(form.password.data):
             return redirect(url_for('signin'))
-        leave_current_game()
-        session.pop('id', None)
-        sid = session.sid
-        start_login(user, remember=form.remember_me.data)
-        socketio.expire_session(sid)
-        ensure_identity()
+        enter_account(user, form.remember_me.data)
         return redirect(url_for('index'))
     return render_template('login.html', title='Sign In', form=form)
 
@@ -252,12 +259,7 @@ def register():
         user.set_password(form.password.data)
         db.session.add(user)
         db.session.commit()
-        leave_current_game()
-        session.pop('id', None)
-        sid = session.sid
-        start_login(user, remember=False)
-        socketio.expire_session(sid)
-        ensure_identity()
+        enter_account(user, False)
         return redirect(url_for('index'))
     return render_template('register.html', title='Register', form=form)
 
@@ -267,12 +269,10 @@ def logout():
     leave_current_game()
     revoke_login()
     socketio.expire_login(session.get('_user_id'))
-    sid = session.sid
     logout_user()
     session['_remember'] = 'clear'
     ensure_identity()
-    app.session_interface.regenerate(session)
-    socketio.expire_session(sid)
+    rotate_session()
     return redirect(url_for('index'))
 
 

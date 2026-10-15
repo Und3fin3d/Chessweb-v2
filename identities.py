@@ -26,16 +26,14 @@ def load_player(token):
     return player
 
 
-def start_login(player, remember=False):
+def start_login(player, remember):
     duration = current_app.config.get('REMEMBER_COOKIE_DURATION', timedelta(days=365)) if remember else current_app.permanent_session_lifetime
-    seconds = duration.total_seconds() if isinstance(duration, timedelta) else duration
-    token = LoginToken(id=token_urlsafe(32), player_id=player.id, expires=int(time() + seconds))
+    token = LoginToken(id=token_urlsafe(32), player_id=player.id, expires=int(time() + duration.total_seconds()))
     db.session.execute(db.delete(LoginToken).where(LoginToken.expires <= time()))
     db.session.add(token)
     db.session.commit()
     player.login_token = token.id
     login_user(player, remember=remember)
-    current_app.session_interface.regenerate(session)
 
 
 def revoke_login():
@@ -81,14 +79,6 @@ class SessionStore:
 
     def __getattr__(self, name):
         return getattr(self.backend, name)
-
-    @property
-    def cache(self):
-        return self.backend.cache
-
-    @cache.setter
-    def cache(self, cache):
-        self.backend.cache = cache
 
     def stale(self, state):
         token = state.get('_user_id')
