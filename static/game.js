@@ -1,4 +1,4 @@
-const socketio = io()
+const socketio = connectSession()
 socketio.on('redirect', (dest) => {
   window.location = dest;
 });

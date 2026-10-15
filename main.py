@@ -1,20 +1,22 @@
-from flask import render_template, redirect, url_for, session, request
-from flask_socketio import SocketIO, join_room, close_room
-from flask_login import LoginManager, login_user, logout_user, current_user
+from flask import render_template, redirect, url_for, session, request, g
+from flask_socketio import join_room, close_room
+from flask_login import logout_user, current_user
 from models import Player, Game
+from identities import SessionLoginManager, SessionSocketIO, SessionStore, allocate_guest, load_player, start_login, revoke_login
 from static.forms import LoginForm, RegistrationForm
 from chess import Board
 from bug import BugBoards
 from config import app, db
 from time import perf_counter
-import os,glob
+from secrets import token_urlsafe
 
 boards = {}
 boards['custom'] = {}  # Store custom position games
 bug_games = {}
-anon = [1]
+game_epoch = token_urlsafe(16)
 activeg = [0]
-socketio = SocketIO(app, manage_session=False)
+app.session_interface = SessionStore(app.session_interface)
+socketio = SessionSocketIO(app, manage_session=False)
 
 BUG_SEATS = [
     {'team': 0, 'board': 0, 'colour': 'white'},
@@ -26,10 +28,13 @@ BUG_SEATS = [
 with app.app_context():
     db.create_all()
 
-login = LoginManager(app)
+login = SessionLoginManager(app)
 login.login_view = 'login'
 login.init_app(app)
 
+
+def account_game(board):
+    return all(player is not None and player > 0 for player in board[1:3])
 
 def player_identifier():
     if current_user.is_authenticated:
@@ -124,22 +129,86 @@ def bug_state_payload(game_data):
 
 @login.user_loader
 def load_user(user_id):
-    return Player.query.get(int(user_id))
+    return load_player(user_id)
+
+
+def leave_current_game():
+    if session.get('variant') == 'bughouse':
+        cleanup_bug_session()
+    elif 'game' in session:
+        room = 'game' + str(session['game'])
+        current = get_game_data()
+        if current and current[8].active:
+            socketio.emit('over', {'message': 'A player left the game.'}, room=room, skip_sid=getattr(request, 'sid', None))
+        socketio.server.close_room(room, namespace='/')
+        cleanup_standard_session()
+    reset_session_flags()
+
+
+def ensure_identity():
+    if session.get('game_epoch') != game_epoch:
+        reset_session_flags()
+        session['game_epoch'] = game_epoch
+    if current_user.is_authenticated:
+        if g.pop('remembered_login', False) or 'id' in session:
+            leave_current_game()
+            session.pop('id', None)
+            rotate_session()
+        session['username'] = current_user.username
+    else:
+        if session.pop('_user_id', None) is not None:
+            reset_session_flags()
+        session.pop('_fresh', None)
+        if not isinstance(session.get('id'), int) or session['id'] >= 0:
+            reset_session_flags()
+            session['id'] = allocate_guest()
+        session['username'] = f'Anonymous-{abs(session["id"])}'
+    session['authenticated'] = current_user.is_authenticated
+    if 'game' in session and not owns_current_game():
+        reset_session_flags()
+
+
+def rotate_session():
+    sid = session.sid
+    app.session_interface.regenerate(session)
+    socketio.expire_session(sid)
+
+
+def enter_account(user, remember):
+    leave_current_game()
+    session.pop('id', None)
+    start_login(user, remember)
+    rotate_session()
+    ensure_identity()
+
+
+def owns_current_game():
+    if session.get('variant') == 'bughouse':
+        board = get_bug_game()[0]
+        return board is not None and player_identifier() in board['seat_lookup']
+    board = get_game_data()
+    player = current_user.id if current_user.is_authenticated else session.get('id')
+    return board is not None and player in board[1:3]
+
+
+socketio.identity_handler = ensure_identity
+
+
+@app.before_request
+def prepare_identity():
+    if request.endpoint != 'static':
+        ensure_identity()
+
+
+def session_payload():
+    keys = ['authenticated', 'username', '_fresh', 'game', 'increment', 'pieces', 'id', 'variant', 'bug_board', 'bug_colour', 'bug_team']
+    return {key: session.get(key) for key in keys}
 
 
 @app.route('/')
 def index():
     user = current_user
-    if not user.is_authenticated:
-        if 'id' not in session:
-            session['id'] = anon[0]
-            session['username'] = f"Anonymous-{anon[0]}"
-            x = anon.pop()
-            if len(anon) == 0:
-                anon.append(x + 1)
-    else:
-        session['username'] = user.username
-        session['_fresh'] = True
+    ensure_identity()
 
     if 'game' in session:
         variant = session.get('variant', 'classic')
@@ -163,7 +232,7 @@ def index():
             else:
                 reset_session_flags()
 
-    return render_template('index.html', user=user)
+    return render_template('index.html', user=user, session=session_payload())
 
 
 @app.route('/signin', methods=['GET', 'POST'])
@@ -175,32 +244,35 @@ def signin():
         user = Player.query.filter_by(username=form.username.data).first()
         if user is None or not user.check_password(form.password.data):
             return redirect(url_for('signin'))
-        anon.insert(0, session.pop('id'))
-        login_user(user, remember=form.remember_me.data)
-        session['username'] = form.username.data
+        enter_account(user, form.remember_me.data)
         return redirect(url_for('index'))
     return render_template('login.html', title='Sign In', form=form)
 
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
     form = RegistrationForm()
     if form.validate_on_submit():
         user = Player(username=form.username.data, email=form.email.data)
         user.set_password(form.password.data)
         db.session.add(user)
         db.session.commit()
-        anon.insert(0, session.pop('id'))
-        login_user(user, remember=False)
-        session['username'] = form.username.data
+        enter_account(user, False)
         return redirect(url_for('index'))
     return render_template('register.html', title='Register', form=form)
 
 
 @app.route('/logout')
 def logout():
+    leave_current_game()
+    revoke_login()
+    socketio.expire_login(session.get('_user_id'))
     logout_user()
-    reset_session_flags()
+    session['_remember'] = 'clear'
+    ensure_identity()
+    rotate_session()
     return redirect(url_for('index'))
 
 
@@ -213,16 +285,16 @@ def game():
         key = bug_bucket_key()
         bucket = bug_games.get(key) if key else None
         if bucket and session['game'][0] in bucket and bucket[session['game'][0]].get('ready'):
-            return render_template('game.html', variant='bughouse')
+            return render_template('game.html', variant='bughouse', session=session_payload())
         return redirect(url_for('index'))
     time_key = session['game'][1]
     # Support custom games
     if time_key == 'custom':
         if session['game'][0] in boards['custom']:
-            return render_template('game.html', variant='classic')
+            return render_template('game.html', variant='classic', session=session_payload())
         return redirect(url_for('index'))
     if time_key in boards and session['game'][0] in boards[time_key]:
-        return render_template('game.html', variant='classic')
+        return render_template('game.html', variant='classic', session=session_payload())
     return redirect(url_for('index'))
 @app.route('/bgame')
 def bgame():
@@ -232,23 +304,14 @@ def bgame():
 
 
 @socketio.on('connect')
-def handle_connect():
+def handle_connect(auth=None):
     if current_user.is_authenticated:
         join_room(current_user.id)
 
 
 @socketio.on('home')
 def home():
-    if session.get('variant') == 'bughouse':
-        cleanup_bug_session()
-    elif 'game' in session:
-        room = 'game' + str(session['game'])
-        current = get_game_data()
-        if current and current[8].active:
-            socketio.emit('over', {'message': 'A player left the game.'}, room=room, skip_sid=request.sid)
-        close_room(room)
-        cleanup_standard_session()
-    reset_session_flags()
+    leave_current_game()
     socketio.emit('redirect', url_for('index'), room=request.sid)
 
 
@@ -267,7 +330,6 @@ def over():
 def pair(request_payload):
     time_selection = request_payload['data'][0]
     increment = request_payload['data'][1]
-    session['increment'] = increment
 
     def create_board(authenticated):
         games = next_game_id()
@@ -288,9 +350,8 @@ def pair(request_payload):
         session['variant'] = 'classic'
         join_room('waiting' + str(games))
 
-    if 'game' in session:
-        cleanup_standard_session()
-        reset_session_flags()
+    leave_current_game()
+    session['increment'] = increment
     if time_selection in boards:
         match = [
             x for x in boards[time_selection]
@@ -316,17 +377,9 @@ def pair(request_payload):
 def bugmatch(request_payload):
     time_selection = request_payload['data'][0]
     increment = request_payload['data'][1]
+    leave_current_game()
     session['increment'] = increment
     session['variant'] = 'bughouse'
-
-    if 'game' in session and session.get('variant') == 'bughouse':
-        cleanup_bug_session()
-        reset_session_flags()
-        session['variant'] = 'bughouse'
-    elif 'game' in session:
-        cleanup_standard_session()
-        reset_session_flags()
-        session['variant'] = 'bughouse'
 
     bucket_key = (time_selection, increment)
     bucket = bug_games.setdefault(bucket_key, {})
@@ -396,6 +449,8 @@ def bugmatch(request_payload):
 
 def get_game_data():
     """Get current game data from session, supporting both standard and custom games."""
+    if 'game' not in session:
+        return None
     time_key = session['game'][1]
     game_id = session['game'][0]
     if time_key == 'custom':
@@ -463,7 +518,7 @@ def update(request_payload):
         }, room=room_name)
         socketio.emit('over', room=room_name)
         close_room(room_name)
-        if current_user.is_authenticated:
+        if account_game(current):
             white_player = db.session.query(Player).get(current[2])
             black_player = db.session.query(Player).get(current[1])
             if game.result is True:
@@ -505,7 +560,7 @@ def timeout():
         }, room=room_name)
         socketio.emit('over', room=room_name)
         close_room(room_name)
-        if current_user.is_authenticated:
+        if account_game(current):
             white_player = db.session.query(Player).get(current[2])
             black_player = db.session.query(Player).get(current[1])
             new_game = Game(white_player=white_player, black_player=black_player, result=label, fen=game.FEN)
@@ -706,6 +761,7 @@ def create_custom_game(request_payload):
         socketio.emit('error', {'message': f'Invalid FEN position: {str(e)}'}, room=request.sid)
         return
     
+    leave_current_game()
     game_id = next_game_id()
     user_id = current_user.id if current_user.is_authenticated else session['id']
     
@@ -724,6 +780,10 @@ def create_custom_game(request_payload):
         'waiting'  # status: waiting, active, completed
     ]
     
+    session['game'] = [game_id, 'custom']
+    session['pieces'] = False
+    session['variant'] = 'classic'
+    join_room(f'waiting-custom-{game_id}')
     socketio.emit('customGameCreated', {'gameId': game_id}, room=request.sid)
 
 
@@ -777,6 +837,7 @@ def join_custom_game(request_payload):
         return
     
     # Add player 2 to the game
+    leave_current_game()
     game_data[1] = current_id
     game_data[3] = session['username']
     game_data[10] = 'active'

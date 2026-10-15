@@ -1,7 +1,7 @@
 let background = '#121012'
 let text
 let tim
-const socket = io()
+const socket = connectSession()
 socket.on('redirect', (dest) => {
     window.location = dest
 })
@@ -196,7 +196,7 @@ window.tab = function(new_tab) {
     }
 }
 
-let loggedin = sess._fresh
+let loggedin = sess.authenticated
 let profile = document.getElementById("profile")
 let login = document.getElementsByClassName("login")
 let username = document.getElementById("name")
